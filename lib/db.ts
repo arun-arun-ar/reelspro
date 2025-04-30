@@ -1,41 +1,40 @@
+// Complex way to connect MongoDB using Mongoose and caching (for serverless environments)
+
 import mongoose from "mongoose";
 
-// import mongodb_uri form .env file
-//" ! " is a not null assertion(tell the compiler the value wont be undefined)
+// Import MongoDB URI from .env file
+// "!" is a non-null assertion (tells the compiler the value won't be undefined)
 const MONGODB_URI = process.env.MONGODB_URI!;
 
-
-//run time checking if the mongodb uri is present or not
+// Runtime check: Ensure the MongoDB URI is provided
 if (!MONGODB_URI) {
     throw new Error("Please define MONGODB_URI in your .env file");
 }
 
-//if the database is alredy connected reuse the connectin
-// helps to prevent muntiple connections during serverless function cold starts 
+// If a database connection already exists, reuse it
+// This helps prevent multiple connections during serverless function cold starts
 let cached = global.mongoose;
 
-
-// initialize global cash if not present
+// Initialize global cache if not already present
 if (!cached) {
-    //conn store the actual database connection
-    //to avoide muntiple simultaneus connection attemps
+    // `conn` stores the actual database connection
+    // This avoids multiple simultaneous connection attempts
     cached = global.mongoose = { conn: null, promise: null };
 }
 
-
-//function to connect databse
+// Function to connect to the database
 export async function connectToDatabase() {
-    //if a connection is alredy existing reusing that connecton to avoide reconnection
+    // If a connection already exists, reuse it to avoid reconnection
     if (cached.conn) {
         return cached.conn;
     }
 
-    //create a new connection(promise) if database connection doesn't exists 
+    // Create a new connection (Promise) if one doesn't exist
     if (!cached.promise) {
         const opts = {
-            // bufferCommand : - queue operations untill the connecton is made
+            // bufferCommands: queue operations until the connection is established
             bufferCommands: true,
-            //: - maximum number of connection in the pool 
+            // maxPoolSize: maximum number of connections in the pool
             maxPoolSize: 10,
         };
 
@@ -43,14 +42,47 @@ export async function connectToDatabase() {
     }
 
     try {
-        //waiting for connection to complete 
+        // Wait for the connection to complete
         cached.conn = await cached.promise;
+
+        // Log success message once connected
+        console.log("✅ Database connected successfully.");
     } catch (error) {
-        //error handeling
+        // Error handling
         cached.promise = null;
+        console.error("❌ Failed to connect to the database:", error);
         throw new Error("Check your database connection settings");
     }
 
-    // retrun database connection or retrun the succesfully connected database instance
+    // Return the connected database instance
     return cached.conn;
 }
+
+
+//easiser way to conntect database
+// import mongoose from "mongoose";
+
+// interface ConnectionObject {
+//     isConnected?: number;
+// }
+
+// const connection: ConnectionObject = {};
+
+// export async function dbConnect(): Promise<void> {
+//     if (connection.isConnected) {
+//         return;
+//     }
+
+//     if (!process.env.MONGODB_URI) {
+//         throw new Error("Missing MONGODB_URI environment variable");
+//     }
+
+//     try {
+//         const db = await mongoose.connect(process.env.MONGODB_URI);
+//         connection.isConnected = db.connections[0].readyState;
+//         console.log("db connected!");
+//     } catch (error) {
+//         console.error("db connection failed!", error);
+//         throw error;
+//     }
+// }
